@@ -1,0 +1,19 @@
+{
+  "event": "answer.created",
+  "survey_id": "6a3ec49cbf4fde2e19a7717f",
+  "submitted_at": "2026-06-27T18:30:00+03:00",
+  "answers": [
+    {"question_id": "fio", "value": "Иванов Иван Иванович"},
+    {"question_id": "phone", "value": "+7 910 123-45-67"},
+    {"question_id": "email", "value": "ivanov@example.com"},
+    {"question_id": "snils", "value": "123-456-789 00"},
+    {"question_id": "object_address", "value": "Тверская обл., г. Тверь, ул. Медниковская, д. 53"},
+    {"question_id": "object_cadnum", "value": "69:10:0000023:42"},
+    {"question_id": "work_main", "value": "8. Межевой план: уточнение местоположения границ ЗУ"},
+    {"question_id": "work_extra", "value": "13, 5"},
+    {"question_id": "deadline", "value": "30 дней"},
+    {"question_id": "budget", "value": "до 50 000 руб"},
+    {"question_id": "notes", "value": "Участок под ИЖС, соседи подписали акт."},
+    {"question_id": "consent_pdn", "value": true}
+  ]
+}
