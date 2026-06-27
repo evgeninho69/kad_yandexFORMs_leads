@@ -152,7 +152,10 @@ def build_deal_fields(
     fields: dict[str, Any] = {
         "TITLE": title[:255],
         "CATEGORY_ID": funnel_id,
-        "STAGE_ID": "NEW",  # most funnels use NEW as the first stage; service adjusts later.
+        # In funnel 3 (Проекты 2КАД ЮЛ/ФЛ) the first stage id is "C3:NEW".
+        # Hardcoding "NEW" would create the deal outside the funnel. Verified
+        # 2026-06-27 via crm.status.list DEAL_STAGE_3.
+        "STAGE_ID": f"C{funnel_id}:NEW",
         "RESPONSIBLE_ID": responsible_id,
         "OPENED": "Y",
         "COMMENTS": comment_text,
