@@ -29,10 +29,10 @@ logging.basicConfig(
     level=os.environ.get("LOG_LEVEL", "info").upper(),
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
-logger = logging.getLogger("2kad-yandex-leads")
+logger = logging.getLogger("kad_yandexFORMs_leads")
 
 app = FastAPI(
-    title="2KAD Yandex Leads",
+    title="kad_yandexFORMs_leads",
     version="0.1.0",
     description="Yandex Forms answer.created -> Bitrix24 deal.add (CATEGORY_ID=3)",
 )
@@ -60,7 +60,7 @@ def _verify_secret(secret_header: str | None) -> None:
 
 @app.get("/healthz")
 def healthz() -> dict[str, Any]:
-    return {"ok": True, "service": "2kad-yandex-leads", "funnel": _funnel_id()}
+    return {"ok": True, "service": "kad_yandexFORMs_leads", "funnel": _funnel_id()}
 
 
 @app.post("/webhook/yandex")
@@ -100,7 +100,7 @@ async def webhook_yandex(
         logger.exception("Bitrix error")
         # Notify owner; still return 200 to stop Yandex retries on a known-bad
         # shape — re-dispatch handled by the folder-watcher cron, not Yandex.
-        tg_notify(f"[2kad-yandex-leads] ❌ Bitrix error: {exc}\nPayload keys: {sorted(payload.keys())}")
+        tg_notify(f"[kad_yandexFORMs_leads] ❌ Bitrix error: {exc}\nPayload keys: {sorted(payload.keys())}")
         return {"ok": False, "error": str(exc), "parsed_keys": list(parsed.keys())}
 
     # Best-effort: publish brief into deal timeline (works on on-prem Bitrix).
@@ -120,7 +120,7 @@ async def webhook_yandex(
         logger.warning("timeline comment failed (non-fatal): %s", exc)
 
     tg_notify(
-        f"[2kad-yandex-leads] ✅ Новая заявка → сделка #{deal_id}\n"
+        f"[kad_yandexFORMs_leads] ✅ Новая заявка → сделка #{deal_id}\n"
         f"Заголовок: {fields.get('TITLE', '?')}\n"
         f"ФИО: {parsed.get('fio', '—')}\n"
         f"Телефон: {parsed.get('phone', '—')}"

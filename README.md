@@ -1,4 +1,4 @@
-# 2KAD Yandex Leads
+# kad_yandexFORMs_leads
 
 Webhook bridge: **Yandex Forms → Bitrix24** for ООО «2КАД».
 
@@ -11,7 +11,7 @@ Webhook bridge: **Yandex Forms → Bitrix24** for ООО «2КАД».
 4. Posts a brief to the deal timeline via `crm.timeline.comment.add` (works on on-prem Bitrix; `im.*` API is unavailable on this version).
 5. Optionally pings the owner on Telegram.
 
-Folder creation on `D:\1.4 Лиды. ЮЛ\` is **not** done here (Dokploy ≠ 2KAD server). A separate cron `2kad-yandex-leads-folder-watcher` on the 2KAD server watches the funnel and creates the project folder.
+Folder creation on `D:\1.4 Лиды. ЮЛ\` is **not** done here (Dokploy ≠ 2KAD server). A separate cron `kad_yandexFORMs_leads-folder-watcher` on the 2KAD server watches the funnel and creates the project folder.
 
 ## Why this exists
 
@@ -37,8 +37,8 @@ If both are set, webhook takes precedence.
 ## Deploy (Dokploy)
 
 ```bash
-cd "D:/11. 2KAD_Soft/My projects/2kad-yandex-leads"
-git init && git add . && git commit -m "init: 2kad-yandex-leads webhook bridge"
+cd "D:/11. 2KAD_Soft/My projects/kad_yandexFORMs_leads"
+git init && git add . && git commit -m "init: kad_yandexFORMs_leads webhook bridge"
 git remote add origin <repo_url> && git push -u origin main
 ```
 
