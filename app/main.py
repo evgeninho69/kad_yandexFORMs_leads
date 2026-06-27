@@ -103,9 +103,12 @@ async def webhook_yandex(
         tg_notify(f"[kad_yandexFORMs_leads] ❌ Bitrix error: {exc}\nPayload keys: {sorted(payload.keys())}")
         return {"ok": False, "error": str(exc), "parsed_keys": list(parsed.keys())}
 
-    # Best-effort: publish brief into deal timeline (works on on-prem Bitrix).
+    # Best-effort: publish full request data into deal timeline (works on
+    # on-prem Bitrix; im.* API unavailable, crm.timeline.comment.add is the
+    # correct path — verified 2026-06-18, see 2kad-bitrix-start-project notes).
     try:
         with _bitrix() as bx:
+            # 1) Compact header with metadata.
             bx.crm_timeline_comment_add(
                 entity_type="deal",
                 entity_id=deal_id,
@@ -113,11 +116,31 @@ async def webhook_yandex(
                     f"Заявка из Яндекс Формы\n"
                     f"Survey: {parsed.get('_survey_id', '?')}\n"
                     f"Event: {parsed.get('_event', 'answer.created')}\n"
-                    f"Submitted: {parsed.get('_submitted_at', '?')}"
+                    f"Submitted: {parsed.get('_submitted_at', '?')}\n"
+                    f"--- Полные данные заявки ---\n"
+                    f"{fields.get('COMMENTS', '(нет данных)')}"
                 ),
             )
+            # 2) Add a task to fetch documents (matches the C3:NEW stage
+            # semantics — "Получить документы").
+            bx.call(
+                "crm.todo.add",
+                {
+                    "fields": {
+                        "OWNER_ID": deal_id,
+                        "OWNER_TYPE": "D",
+                        "TITLE": "Запросить документы у заказчика",
+                        "DESCRIPTION": (
+                            f"Заявка #{deal_id} с Яндекс Формы. "
+                            f"Связаться с {parsed.get('fio', '—')}, тел. "
+                            f"{parsed.get('phone', '—')}, e-mail "
+                            f"{parsed.get('email', '—')}."
+                        ),
+                    }
+                },
+            )
     except BitrixError as exc:
-        logger.warning("timeline comment failed (non-fatal): %s", exc)
+        logger.warning("timeline comment / todo failed (non-fatal): %s", exc)
 
     tg_notify(
         f"[kad_yandexFORMs_leads] ✅ Новая заявка → сделка #{deal_id}\n"
