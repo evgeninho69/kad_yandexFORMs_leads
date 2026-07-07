@@ -1,0 +1,15 @@
+[providers]
+# Use Dockerfile when present (slim python:3.12 image, smaller than nixpacks).
+# Nixpacks works too via Procfile, but Dockerfile is reproducible and faster.
+# Dokploy auto-detects Dockerfile first when buildType=dockerfile.
+
+[start]
+cmd = "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"
+
+[phases.setup]
+# We use the python:3.12-slim base from Dockerfile, but if Nixpacks is
+# forced, this keeps the setup phase explicit.
+nixPkgs = ["python312"]
+
+[phases.install]
+cmds = ["pip install -r requirements.txt"]
