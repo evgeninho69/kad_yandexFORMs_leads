@@ -1,0 +1,2 @@
+# YC Function runtime provides these via standard library + add-on packages.
+# Keep this list minimal — serverless cold start depends on it.

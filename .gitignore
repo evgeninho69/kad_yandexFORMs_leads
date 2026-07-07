@@ -5,3 +5,10 @@ __pycache__/
 .env
 .env.local
 *.log
+
+# YC Function local dev (deploy via deploy.py from the script itself)
+yc_function/__pycache__/
+yc_function/issue_iam.py
+
+# Local logs from uvicorn
+.uvicorn.*.log

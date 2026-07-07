@@ -20,21 +20,32 @@ logger = logging.getLogger(__name__)
 
 # question_id -> (canonical key, human label)
 # Set these in production once we have the actual form schema. Default mapping
-# matches the v5 form for "Заявка на кадастровые / землеустроительные работы".
+# matches the v6 form for "Заявка на кадастровые работы — 2КАД (ФЛ/ИП/ЮЛ)".
 DEFAULT_FIELD_MAP: dict[str, tuple[str, str]] = {
-    "fio": ("fio", "ФИО"),
-    "phone": ("phone", "Телефон"),
-    "email": ("email", "Email"),
+    "customer_type": ("customer_type", "Тип заказчика"),
+    "org_name": ("org_name", "Название организации"),
+    "inn": ("inn", "ИНН"),
+    "fio": ("fio", "ФИО контактного лица"),
+    "phone": ("phone", "Контактный телефон"),
+    "email": ("email", "Электронная почта"),
     "snils": ("snils", "СНИЛС"),
-    "object_address": ("object_address", "Адрес объекта"),
+    "contact_pref": ("contact_pref", "Как удобнее связаться"),
+    "object_kind": ("object_kind", "Что является объектом работ"),
     "object_cadnum": ("object_cadnum", "Кадастровый номер"),
-    "work_main": ("work_main", "Основной вид работ"),
+    "object_address": ("object_address", "Адрес или ориентир объекта"),
+    "object_area": ("object_area", "Площадь объекта, м²"),
+    "object_address_official": ("object_address_official", "Присвоен ли объекту официальный адрес"),
+    "work_a": ("work_a", "A. Межевые планы"),
+    "work_b": ("work_b", "B. Технические планы"),
+    "work_c": ("work_c", "C. ККР и заключения КИ"),
+    "work_d": ("work_d", "D. Смежные услуги"),
     "work_extra": ("work_extra", "Дополнительные виды работ"),
-    "cadastral_engineer": ("cadastral_engineer", "Кадастровый инженер"),
-    "deadline": ("deadline", "Срок"),
-    "budget": ("budget", "Бюджет"),
-    "notes": ("notes", "Комментарий"),
-    "consent_pdn": ("consent_pdn", "Согласие на ПДн"),
+    "files_list": ("files_list", "Перечень прикреплённых документов"),
+    "notes": ("notes", "Описание задачи"),
+    "deadline": ("deadline", "Желаемая дата завершения"),
+    "urgency": ("urgency", "Срочность"),
+    "source": ("source", "Откуда узнали о нас"),
+    "consent_pdn": ("consent_pdn", "Согласие на обработку ПДн"),
 }
 
 
@@ -119,63 +130,200 @@ def normalise_payload(payload: dict[str, Any]) -> dict[str, str]:
     return out
 
 
+def _classify_customer(parsed: dict[str, str]) -> str:
+    """Определить тип заказчика: ФЛ / ИП / ЮЛ.
+
+    Приоритеты:
+      1. явное значение в customer_type (case-insensitive) — приоритет;
+      2. эвристика по ИНН (10 цифр = ЮЛ, 12 = ИП) при наличии;
+      3. наличие org_name + inn → ИП;
+      4. дефолт — ФЛ.
+    """
+    raw = (parsed.get("customer_type") or "").strip().lower()
+    if "юр" in raw or "юл" in raw or "ооо" in raw or "организац" in raw or "обществ" in raw:
+        return "ЮЛ"
+    if "ип" in raw or "предпринимател" in raw:
+        return "ИП"
+    if "физ" in raw or "фл" in raw or "лиц" in raw:
+        return "ФЛ"
+    inn = (parsed.get("inn") or "").strip()
+    org = (parsed.get("org_name") or "").strip()
+    if inn.isdigit():
+        if len(inn) == 10:
+            return "ЮЛ"
+        if len(inn) == 12:
+            return "ИП"
+    if inn or org:
+        return "ИП"
+    return "ФЛ"
+
+
+# Справочник работ для раскрытия кодов A/B/C/D в TITLE и COMMENTS.
+WORK_CATALOG = {
+    "A": [
+        "Уточнение границ земельного участка (межевание)",
+        "Раздел земельного участка",
+        "Объединение земельных участков",
+        "Перераспределение земельных участков",
+        "Образование ЗУ из земель гос/муниципальной собственности",
+        "Вынос границ земельного участка в натуру",
+        "Образование части земельного участка",
+        "Исправление реестровой ошибки в ЕГРН",
+        "Объединение ЗУ с сохранением исходных",
+        "Раздел с сохранением исходного ЗУ в изменённых границах",
+        "Установление сервитута (части)",
+        "Межевание с уточнением площади",
+        "Схема расположения ЗУ на КПТ",
+    ],
+    "B": [
+        "Технический план здания",
+        "Технический план сооружения",
+        "Технический план ОНС",
+        "Технический план машино-места",
+        "Технический план единого недвижимого комплекса",
+        "Технический план помещения",
+        "Технический план МКД",
+        "Акт обследования (снос ОКС)",
+        "Подготовка ТП для ввода ОКС в эксплуатацию",
+        "Внесение изменений в ЕГРН (реконструкция, перепланировка)",
+        "Технический план для регистрации права",
+        "Технический паспорт",
+    ],
+    "C": [
+        "Комплексные кадастровые работы (ККР)",
+        "Заключение кадастрового инженера (ЗКИ)",
+        "Судебная землеустроительная экспертиза",
+        "Межевой план для исправления реестровой ошибки",
+    ],
+    "D": None,  # D — свободный текст
+}
+
+
+def _expand_codes(s: str, kind: str) -> str:
+    if not s:
+        return ""
+    items = WORK_CATALOG.get(kind)
+    if not items:
+        return s
+    out: list[str] = []
+    for token in s.split(","):
+        n = int("".join(c for c in token if c.isdigit()) or 0)
+        if 1 <= n <= len(items):
+            out.append(items[n - 1])
+    return "; ".join(out)
+
+
+def _format_work_summary(parsed: dict[str, str]) -> str:
+    parts: list[str] = []
+    a = _expand_codes(parsed.get("work_a", ""), "A")
+    if a:
+        parts.append(f"[A] {a}")
+    b = _expand_codes(parsed.get("work_b", ""), "B")
+    if b:
+        parts.append(f"[B] {b}")
+    c = _expand_codes(parsed.get("work_c", ""), "C")
+    if c:
+        parts.append(f"[C] {c}")
+    d = (parsed.get("work_d") or "").strip()
+    if d:
+        parts.append(f"[D] {d}")
+    extra = (parsed.get("work_extra") or "").strip()
+    if extra:
+        parts.append(f"[+] {extra}")
+    return " | ".join(parts) if parts else "(не выбраны)"
+
+
+def _first_work(work_summary: str) -> str:
+    if not work_summary or work_summary == "(не выбраны)":
+        return ""
+    first = work_summary.split("|")[0].strip()
+    for prefix in ("[A] ", "[B] ", "[C] ", "[D] ", "[+] "):
+        if first.startswith(prefix):
+            return first[len(prefix):]
+    return first
+
+
 def build_deal_fields(
     parsed: dict[str, str],
     *,
     funnel_id: int,
     responsible_id: int,
 ) -> dict[str, Any]:
-    """Compose crm.deal.add fields from the parsed payload."""
+    """Compose crm.deal.add fields from the parsed payload (v6 form)."""
+    customer_type = _classify_customer(parsed)
+    work_summary = _format_work_summary(parsed)
+    addr = (parsed.get("object_address") or "").strip()
+    org = (parsed.get("org_name") or "").strip()
+
+    # TITLE: «{первая работа} — {адрес} — {тип}».
     title_parts: list[str] = []
-    work_main = parsed.get("work_main", "").strip()
-    if work_main:
-        title_parts.append(work_main[:80])
-    addr = parsed.get("object_address", "").strip()
+    first = _first_work(work_summary)
+    if first:
+        title_parts.append(first[:80])
     if addr:
         title_parts.append(addr[:80])
-    fio = parsed.get("fio", "").strip()
     if not title_parts:
-        title_parts = ["Заявка с Яндекс Формы"]
-    title = " — ".join(title_parts)
+        title_parts.append("Заявка с Яндекс Формы")
+    title_parts.append(customer_type)
+    title = " — ".join(title_parts)[:255]
 
+    # COMMENTS: многострочный бриф, удобный для просмотра в карточке сделки.
     comments: list[str] = []
-    for key, label in DEFAULT_FIELD_MAP.values():
-        val = parsed.get(key, "").strip()
-        if not val:
-            continue
-        comments.append(f"{label}: {val}")
-    extra_notes = parsed.get("notes", "").strip()
-    if extra_notes:
-        comments.append(f"--- Доп. комментарий ---\n{extra_notes}")
-    comment_text = "\n".join(comments) if comments else "(пусто)"
+    comments.append(f"Тип заказчика: {customer_type}")
+    if org:
+        comments.append(f"Организация: {org}")
+    inn = (parsed.get("inn") or "").strip()
+    if inn:
+        comments.append(f"ИНН: {inn}")
+    comments.append("")
+    comments.append("=== ЗАКАЗЧИК ===")
+    for key in ("fio", "phone", "email", "snils", "contact_pref"):
+        val = (parsed.get(key) or "").strip()
+        if val:
+            comments.append(f"{DEFAULT_FIELD_MAP[key][1]}: {val}")
+    comments.append("")
+    comments.append("=== ОБЪЕКТ ===")
+    for key in ("object_kind", "object_cadnum", "object_address", "object_area", "object_address_official"):
+        val = (parsed.get(key) or "").strip()
+        if val:
+            comments.append(f"{DEFAULT_FIELD_MAP[key][1]}: {val}")
+    comments.append("")
+    comments.append("=== РАБОТЫ ===")
+    comments.append(work_summary)
+    comments.append("")
+    comments.append("=== ДОКУМЕНТЫ ===")
+    files_list = (parsed.get("files_list") or "").strip()
+    if files_list:
+        comments.append(f"Перечень: {files_list}")
+    notes = (parsed.get("notes") or "").strip()
+    if notes:
+        comments.append(f"Описание: {notes}")
+    comments.append("")
+    comments.append("=== СРОКИ ===")
+    for key in ("deadline", "urgency", "source"):
+        val = (parsed.get(key) or "").strip()
+        if val:
+            comments.append(f"{DEFAULT_FIELD_MAP[key][1]}: {val}")
+    consent = (parsed.get("consent_pdn") or "").strip()
+    comments.append("")
+    comments.append(f"Согласие на обработку ПДн: {consent if consent else 'НЕТ'}")
+    comment_text = "\n".join(comments)
 
     fields: dict[str, Any] = {
-        "TITLE": title[:255],
+        "TITLE": title,
         "CATEGORY_ID": funnel_id,
-        # In funnel 3 (Проекты 2КАД ЮЛ/ФЛ) the first stage id is "C3:NEW".
-        # Hardcoding "NEW" would create the deal outside the funnel. Verified
-        # 2026-06-27 via crm.status.list DEAL_STAGE_3.
         "STAGE_ID": f"C{funnel_id}:NEW",
         "RESPONSIBLE_ID": responsible_id,
         "OPENED": "Y",
         "COMMENTS": comment_text,
         "SOURCE_ID": "WEB",
-        "SOURCE_DESCRIPTION": "Яндекс Форма (webhook answer.created)",
+        "SOURCE_DESCRIPTION": "Яндекс Форма v6 (webhook answer.created)",
     }
 
-    phone = parsed.get("phone", "").strip()
+    phone = (parsed.get("phone") or "").strip()
     if phone:
-        # Bitrix deal has no native PHONE field; use UF_CRM_RT_TEL_CONT (verified
-        # 2026-06-27 via crm.deal.userfield.list). STRING, not multi.
         fields["UF_CRM_RT_TEL_CONT"] = phone
-    email = parsed.get("email", "").strip()
+    email = (parsed.get("email") or "").strip()
     if email:
         fields["UF_CRM_RT_EMAIL_CONT"] = email
-    # Custom fields commonly used by 2KAD CRM — write only if the operator
-    # confirms the UF codes exist on CATEGORY_ID=3. Safe-no-op if absent.
-    # These are intentionally commented to avoid crm.deal.add 400s on
-    # unknown userfields until we confirm codes.
-    # fields["UF_CRM_OBJECT_CADDRESS"] = addr
-    # fields["UF_CRM_WORK_MAIN"] = work_main
-    # fields["UF_CRM_OBJECT_CADNUMBER"] = parsed.get("object_cadnum", "")
     return fields

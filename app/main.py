@@ -20,6 +20,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Header, HTTPException, Request
 
 from app.bitrix import BitrixClient, BitrixError, from_env as bitrix_from_env
+from app.email_smtp import send_customer_reply
 from app.notify import notify as tg_notify
 from app.yandex_parser import build_deal_fields, normalise_payload
 
@@ -149,10 +150,27 @@ async def webhook_yandex(
         f"Телефон: {parsed.get('phone', '—')}"
     )
 
+    # Auto-reply клиенту на email (best-effort, не блокирует webhook).
+    customer_email = (parsed.get("email") or "").strip()
+    customer_fio = (parsed.get("fio") or "").strip()
+    work_summary = parsed.get("work_main", "").strip() or "(см. список работ в брифе)"
+    auto_reply_ok = send_customer_reply(
+        customer_email,
+        fio=customer_fio,
+        deal_id=deal_id,
+        work_summary=work_summary,
+    )
+    if auto_reply_ok:
+        tg_notify(
+            f"[kad_yandexFORMs_leads] 📧 Авто-ответ отправлен на {customer_email}"
+        )
+
     return {
         "ok": True,
         "deal_id": deal_id,
         "title": fields.get("TITLE"),
+        "customer_type": parsed.get("customer_type", "?"),
+        "auto_reply_sent": auto_reply_ok,
         "parsed_keys": list(parsed.keys()),
     }
 
