@@ -39,7 +39,9 @@ DEFAULT_FIELD_MAP: dict[str, tuple[str, str]] = {
     "work_b": ("work_b", "B. Технические планы"),
     "work_c": ("work_c", "C. ККР и заключения КИ"),
     "work_d": ("work_d", "D. Смежные услуги"),
+    "work_main": ("work_main", "Основной вид работ (TITLE)"),
     "work_extra": ("work_extra", "Дополнительные виды работ"),
+    "objects": ("objects", "Объекты (multi-object JSON)"),
     "files_list": ("files_list", "Перечень прикреплённых документов"),
     "notes": ("notes", "Описание задачи"),
     "deadline": ("deadline", "Желаемая дата завершения"),
@@ -233,6 +235,54 @@ def _format_work_summary(parsed: dict[str, str]) -> str:
     return " | ".join(parts) if parts else "(не выбраны)"
 
 
+def _format_objects_block(parsed: dict[str, str]) -> str:
+    """Multi-object block from wizard v6+. Returns "" if no objects field."""
+    raw = (parsed.get("objects") or "").strip()
+    if not raw:
+        return ""
+    try:
+        import json
+        objs = json.loads(raw)
+    except Exception:
+        return ""
+    if not isinstance(objs, list) or not objs:
+        return ""
+    lines: list[str] = []
+    for i, o in enumerate(objs, 1):
+        if not isinstance(o, dict):
+            continue
+        lines.append(f"--- Объект #{i} ---")
+        t = (o.get("object_type") or "").strip()
+        if t:
+            lines.append(f"Тип: {t}")
+        cad = (o.get("object_cadnum") or "").strip()
+        if cad:
+            lines.append(f"Кадастровый номер: {cad}")
+        addr = (o.get("object_address") or "").strip()
+        if addr:
+            lines.append(f"Адрес: {addr}")
+        area = (o.get("object_area") or "").strip()
+        if area:
+            lines.append(f"Площадь: {area} м²")
+        off = (o.get("object_address_official") or "").strip()
+        if off:
+            lines.append(f"Официальный адрес: {off}")
+        # Works for this object
+        work_lines: list[str] = []
+        for prefix_key, prefix_letter in (("work_a", "A"), ("work_b", "B"), ("work_c", "C"), ("work_d", "D")):
+            arr = o.get(prefix_key) or []
+            if not isinstance(arr, list) or not arr:
+                continue
+            for code in arr:
+                expanded = _expand_codes(str(code), prefix_letter)
+                if expanded:
+                    work_lines.append(f"[{prefix_letter}] {expanded}")
+        if work_lines:
+            lines.append("Работы: " + "; ".join(work_lines))
+        lines.append("")
+    return "\n".join(lines).strip()
+
+
 def _first_work(work_summary: str) -> str:
     if not work_summary or work_summary == "(не выбраны)":
         return ""
@@ -249,9 +299,10 @@ def build_deal_fields(
     funnel_id: int,
     responsible_id: int,
 ) -> dict[str, Any]:
-    """Compose crm.deal.add fields from the parsed payload (v6 form)."""
+    """Compose crm.deal.add fields from the parsed payload (v6 form / wizard)."""
     customer_type = _classify_customer(parsed)
     work_summary = _format_work_summary(parsed)
+    objects_block = _format_objects_block(parsed)
     addr = (parsed.get("object_address") or "").strip()
     org = (parsed.get("org_name") or "").strip()
 
@@ -282,14 +333,20 @@ def build_deal_fields(
         if val:
             comments.append(f"{DEFAULT_FIELD_MAP[key][1]}: {val}")
     comments.append("")
-    comments.append("=== ОБЪЕКТ ===")
-    for key in ("object_kind", "object_cadnum", "object_address", "object_area", "object_address_official"):
-        val = (parsed.get(key) or "").strip()
-        if val:
-            comments.append(f"{DEFAULT_FIELD_MAP[key][1]}: {val}")
-    comments.append("")
-    comments.append("=== РАБОТЫ ===")
-    comments.append(work_summary)
+    if objects_block:
+        # Multi-object wizard v6+
+        comments.append("=== ОБЪЕКТЫ И РАБОТЫ ===")
+        comments.append(objects_block)
+    else:
+        # Single-object legacy form
+        comments.append("=== ОБЪЕКТ ===")
+        for key in ("object_kind", "object_cadnum", "object_address", "object_area", "object_address_official"):
+            val = (parsed.get(key) or "").strip()
+            if val:
+                comments.append(f"{DEFAULT_FIELD_MAP[key][1]}: {val}")
+        comments.append("")
+        comments.append("=== РАБОТЫ ===")
+        comments.append(work_summary)
     comments.append("")
     comments.append("=== ДОКУМЕНТЫ ===")
     files_list = (parsed.get("files_list") or "").strip()
