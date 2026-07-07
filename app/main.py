@@ -18,6 +18,7 @@ from typing import Any
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.bitrix import BitrixClient, BitrixError, from_env as bitrix_from_env
 from app.email_smtp import send_customer_reply
@@ -36,6 +37,27 @@ app = FastAPI(
     title="kad_yandexFORMs_leads",
     version="0.1.0",
     description="Yandex Forms answer.created -> Bitrix24 deal.add (CATEGORY_ID=3)",
+)
+
+# CORS: allow browser-originated POSTs from any Dokploy sub-domain
+# (kad-yandexFORMs-wizard.dev.ii4ki.ru → kad-yandexFORMs-leads.dev.ii4ki.ru).
+# In production we should restrict to exact origins, but the wizard +
+# webhook both live on *.dev.ii4ki.ru so this is a controlled set.
+ALLOWED_ORIGINS = [
+    o.strip()
+    for o in os.environ.get(
+        "CORS_ALLOWED_ORIGINS",
+        "https://kad-yandexFORMs-wizard.dev.ii4ki.ru,https://kad-yandexFORMs-leads.dev.ii4ki.ru",
+    ).split(",")
+    if o.strip()
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["*"],
+    max_age=3600,
 )
 
 
