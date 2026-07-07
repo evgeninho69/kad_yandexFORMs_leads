@@ -1,10 +1,17 @@
 # kad_yandexFORMs_leads — handover
 
-## Текущее состояние (2026-06-27 19:48 MSK)
+## Текущее состояние (2026-07-07 23:55 MSK)
 
-Готов webhook-bridge Яндекс Формы → Bitrix24, **но не задеплоен** из-за отсутствия
-зарегистрированного сервера в Dokploy. Folder-watcher работает с 2KAD-сервера и
-уже закрыл 11 исторических сделок без папок.
+Webhook-bridge Яндекс Формы → Bitrix24 **задеплоен и работает** на Dokploy `dev.ii4ki.ru`.
+E2E-тест 23:55: тестовый POST → сделка #5490 в воронке 3 + авто-ответ на email доставлен.
+
+## История (короткая хронология)
+
+- **2026-06-27 19:48** — код готов, не задеплоен (serverId=null, Nixpacks build failed без Procfile).
+- **2026-07-07 23:35** — получены Bitrix webhook token + Yandex SMTP password.
+- **2026-07-07 23:50** — Nixpacks всё ещё падает, добавлены `Procfile` + `nixpacks.toml`, переключили buildType на `dockerfile`.
+- **2026-07-07 23:53** — `application.deploy` → `status: done` за 6 итераций polling. `/healthz` отвечает 200.
+- **2026-07-07 23:55** — `domain.create` для `kad-yandexFORMs-leads.dev.ii4ki.ru` → `https://kad-yandexFORMs-leads.dev.ii4ki.ru/healthz` ✅. Webhook Яндекс Формы v6 зарегистрирован. E2E: сделка #5490 + email доставлен.
 
 ## Что есть на диске
 
@@ -32,9 +39,7 @@
 
 ## Что НЕ работает прямо сейчас (блокеры)
 
-1. **Dokploy server not registered** (`serverId: null`).
-   - Решение: зайти в `https://dev.ii4ki.ru → Settings → Servers → + Add Server → Local`.
-   - После этого: дать знать Mavis — он проставит serverId в `application.update` и передеплоит.
+1. **Dokploy server not registered** — **РЕШЕНО 2026-07-07**. В v0.29 явная регистрация Local-сервера не нужна — Dokploy-инстанс деплоит «куда угодно» без `serverId`. Достаточно `application.deploy` + `domain.create` для проброса наружу.
 
 2. **Scheduled task для folder-watcher не установлен.**
    - Решение: открыть PowerShell **от Администратора** на 2KAD-сервере и выполнить:
@@ -42,6 +47,7 @@
      powershell.exe -NoProfile -ExecutionPolicy Bypass -File "D:\11. 2KAD_Soft\My projects\kad_yandexFORMs_leads\install_watcher_task.ps1"
      ```
    - Текущая ошибка: `Register-ScheduledTask : Отказано в доступе. (HRESULT: 0x80070005)` — нужно повышение привилегий.
+   - Альтернатива без Admin: `schtasks /create /tn "kad_yandexFORMs_leads-folder-watcher" /tr "..." /sc minute /mo 5 /ru SYSTEM` (если SYSTEM-аккаунт доступен).
 
 ## Что нужно сделать после починки блокеров
 
