@@ -12,6 +12,9 @@ E2E-тест 23:55: тестовый POST → сделка #5490 в воронк
 - **2026-07-07 23:50** — Nixpacks всё ещё падает, добавлены `Procfile` + `nixpacks.toml`, переключили buildType на `dockerfile`.
 - **2026-07-07 23:53** — `application.deploy` → `status: done` за 6 итераций polling. `/healthz` отвечает 200.
 - **2026-07-07 23:55** — `domain.create` для `kad-yandexFORMs-leads.dev.ii4ki.ru` → `https://kad-yandexFORMs-leads.dev.ii4ki.ru/healthz` ✅. Webhook Яндекс Формы v6 зарегистрирован. E2E: сделка #5490 + email доставлен.
+- **2026-07-08 00:00** — skill `kad-it-serv-ii4ki` обновлён (Local Server + Procfile + zodError gotchas), skill уроки зафиксированы в agent memory.
+- **2026-07-08 00:05** — форма v6 Яндекса снята с публикации, webhook удалён, форма удалена. Заменена на wizard-форму `kad_yandexFORMs_wizard` (пошаговая, на нашем Dokploy).
+- **2026-07-08 00:38** — wizard-форма `kad-yandexFORMs-wizard` задеплоена в Dokploy (app id `HT3G4MUBlV4B3hOlVJDwh`, project `kad_yandexFORMs_leads/production`). `https://kad-yandexFORMs-wizard.dev.ii4ki.ru/` — LIVE. E2E: сделка #5491 + email ✅.
 
 ## Что есть на диске
 
