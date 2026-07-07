@@ -15,6 +15,11 @@ E2E-тест 23:55: тестовый POST → сделка #5490 в воронк
 - **2026-07-08 00:00** — skill `kad-it-serv-ii4ki` обновлён (Local Server + Procfile + zodError gotchas), skill уроки зафиксированы в agent memory.
 - **2026-07-08 00:05** — форма v6 Яндекса снята с публикации, webhook удалён, форма удалена. Заменена на wizard-форму `kad_yandexFORMs_wizard` (пошаговая, на нашем Dokploy).
 - **2026-07-08 00:38** — wizard-форма `kad-yandexFORMs-wizard` задеплоена в Dokploy (app id `HT3G4MUBlV4B3hOlVJDwh`, project `kad_yandexFORMs_leads/production`). `https://kad-yandexFORMs-wizard.dev.ii4ki.ru/` — LIVE. E2E: сделка #5491 + email ✅.
+- **2026-07-08 01:00** — добавлен CORS middleware в `kad_yandexFORMs_leads/app/main.py` (allow_origins: оба wizard/leads subdomains), чтобы wizard мог отправлять на webhook. Push `d1f33e0`.
+- **2026-07-08 01:00** — wizard step 4 переделан под multi-object UX: карточка объекта (тип → список работ чекбоксами) → свёрнутая плашка + кнопка «+ Добавить объект». Парсер в `kad_yandexFORMs_leads/app/yandex_parser.py` дополнен `work_main` и `objects` (per-object бриф). Push `d7e27b1` + `e0c237c` + `f3c9b0b` + `e4d3028`.
+- **2026-07-08 01:13** — новый FastAPI-сервис `kad-yandexFORMs-leads` (id `k9rw_WrRyNrH0us6Mg3eE`) развёрнут в проекте **`kad_yandexFORMs_leads/production`** (тот же, что и wizard — больше не в `cuzr_official`). Endpoint: `https://kad-yandexFORMs-leads.dev.ii4ki.ru/webhook/yandex`. wizard переключён на новый URL. **Деплой в процессе** — нужен UI `Deploy` в Dokploy.
+- **2026-07-08 01:36** — webhook-сервис переехал из `cuzr_official` в наш проект `kad_yandexFORMs_leads/production` через **v2 в UI** (id `gwJbtKCk0Hp4bNJc2z-dX`, имя `kad-yandexFORMs-leads`). Деплой через UI Deploy + `application.update cleanCache=true` + `application.redeploy` подтянули свежий commit `d7e27b1` с multi-object parser.
+- **E2E 2026-07-08 01:38** (сделка #5499): wizard → v2 (наш проект) → Bitrix24 сделка, COMMENTS с блоком `=== ОБЪЕКТЫ И РАБОТЫ ===` и per-object breakdown ✅, email клиенту доставлен ✅. Архитектура очищена: вся 2KAD-инфраструктура (wizard + webhook) в проекте `kad_yandexFORMs_leads`.
 
 ## Что есть на диске
 
