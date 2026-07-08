@@ -394,9 +394,10 @@ def build_deal_fields(
             fields["OPPORTUNITY_CURRENCY_ID"] = "RUB"
 
     # Тип заказчика → существующее UF-поле «Тип заказчика (ЮЛ/ФЛ)»
-    # (UF_CRM_1586436225) с вариантами «Физ. лицо» / «Юр. лицо».
+    # (UF_CRM_1586436225) с вариантами «Физ. лицо» (id=315) / «Юр. лицо» (id=316).
+    # Bitrix API для UF-enumeration ожидает **числовой ID варианта**, не строку.
     # ИП маппим на «Юр. лицо» (ИП = ЮЛ для целей сделки).
     cust = _classify_customer(parsed)
-    fields["UF_CRM_1586436225"] = "Юр. лицо" if cust in ("ЮЛ", "ИП") else "Физ. лицо"
+    fields["UF_CRM_1586436225"] = 316 if cust in ("ЮЛ", "ИП") else 315
 
     return fields
