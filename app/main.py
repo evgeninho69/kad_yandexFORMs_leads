@@ -530,6 +530,89 @@ async def webhook_yandex(
             f"[kad_yandexFORMs_leads] 📧 Авто-ответ отправлен на {customer_email}"
         )
 
+    # ---- 11. Создание папки проекта на D:\ через Windows-сервис 2kad_project_creator ----
+    project_path: str | None = None
+    project_number: int | None = None
+    project_creator_url = os.environ.get("PROJECT_CREATOR_URL", "").strip()
+    project_creator_secret = os.environ.get("PROJECT_CREATOR_SECRET", "").strip()
+    if project_creator_url and project_creator_secret and deal_id:
+        try:
+            import httpx
+            with httpx.Client(timeout=60.0) as px:
+                # Соберём payload для Windows-сервиса
+                # Найдём первый work_main (приоритетно из multi-object)
+                work_main = parsed.get("work_main") or "A1"
+                primary_obj = {}
+                try:
+                    if parsed.get("objects"):
+                        _objs = parsed["objects"]
+                        if isinstance(_objs, str):
+                            _objs = json.loads(_objs)
+                        if isinstance(_objs, list) and _objs:
+                            primary_obj = _objs[0]
+                except Exception:  # noqa: BLE001
+                    pass
+                payload_for_pc = {
+                    "deal_id": deal_id,
+                    "contact_id": contact_id,
+                    "company_id": company_id,
+                    "customer_type": customer_type,
+                    "fio": fio,
+                    "phone": phone_raw,
+                    "email": email,
+                    "address": primary_obj.get("object_address") or parsed.get("object_address") or "",
+                    "cadastral": primary_obj.get("object_cadnum") or parsed.get("object_cadnum") or "",
+                    "work_main": work_main,
+                    "title": fields.get("TITLE"),
+                    "agreed_price": agreed_price,
+                    # Полные данные для JSON-дампа в 1. Карта заказчика
+                    "payload": {
+                        "deal_id": deal_id,
+                        "contact_id": contact_id,
+                        "company_id": company_id,
+                        "title": fields.get("TITLE"),
+                        "answers": [
+                            {"question_id": k, "value": v}
+                            for k, v in parsed.items()
+                            if not k.startswith("_")
+                        ],
+                    },
+                    "files": [
+                        {"file_id": f["file_id"], "name": f["name"]}
+                        for f in uploaded_files if f.get("file_id")
+                    ],
+                }
+                pc_resp = px.post(
+                    f"{project_creator_url.rstrip('/')}/create-project",
+                    json=payload_for_pc,
+                    headers={"X-Webhook-Secret": project_creator_secret},
+                )
+                if pc_resp.status_code == 200:
+                    pc_data = pc_resp.json()
+                    project_path = pc_data.get("project_path")
+                    project_number = pc_data.get("project_number")
+                    tg_notify(
+                        f"[kad_yandexFORMs_leads] 📁 Папка проекта создана #{project_number}\n"
+                        f"{project_path}"
+                    )
+                    # Привяжем ссылку в комментарии сделки
+                    try:
+                        with _bitrix() as bx:
+                            bx.crm_timeline_comment_add(
+                                entity_type="deal",
+                                entity_id=deal_id,
+                                comment=f"📁 Папка проекта на D:\\:\n{project_path}",
+                            )
+                    except BitrixError:
+                        pass
+                else:
+                    tg_notify(
+                        f"[kad_yandexFORMs_leads] ⚠ project_creator HTTP {pc_resp.status_code}: {pc_resp.text[:200]}"
+                    )
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("project_creator call failed")
+            tg_notify(f"[kad_yandexFORMs_leads] ⚠ project_creator: {exc}")
+
     return {
         "ok": True,
         "deal_id": deal_id,
@@ -540,6 +623,8 @@ async def webhook_yandex(
         "files_uploaded": len(uploaded_files),
         "auto_reply_sent": auto_reply_ok,
         "agreed_price": agreed_price,
+        "project_path": project_path,
+        "project_number": project_number,
     }
 
 
