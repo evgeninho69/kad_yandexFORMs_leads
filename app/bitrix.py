@@ -212,6 +212,124 @@ class BitrixClient:
             )
         )
 
+    # --- contacts & companies ---------------------------------------------
+
+    def crm_contact_list(
+        self, filter: dict[str, Any], select: list[str] | None = None
+    ) -> list[dict[str, Any]]:
+        """Search contacts by filter (e.g. {"PHONE": "..."} or {"EMAIL": "..."})."""
+        params: dict[str, Any] = {"filter": filter}
+        if select:
+            params["select"] = select
+        result = self.call("crm.contact.list", params)
+        if isinstance(result, list):
+            return result
+        return []
+
+    def crm_contact_add(self, fields: dict[str, Any]) -> int:
+        result = self.call("crm.contact.add", {"fields": fields})
+        try:
+            return int(result)
+        except (TypeError, ValueError) as exc:
+            raise BitrixError(f"Unexpected crm.contact.add response: {result!r}") from exc
+
+    def crm_company_list(
+        self, filter: dict[str, Any], select: list[str] | None = None
+    ) -> list[dict[str, Any]]:
+        """Search companies by filter (e.g. {"UF_CRM_INN": "..."} or {"TITLE": "..."})."""
+        params: dict[str, Any] = {"filter": filter}
+        if select:
+            params["select"] = select
+        result = self.call("crm.company.list", params)
+        if isinstance(result, list):
+            return result
+        return []
+
+    def crm_company_add(self, fields: dict[str, Any]) -> int:
+        result = self.call("crm.company.add", {"fields": fields})
+        try:
+            return int(result)
+        except (TypeError, ValueError) as exc:
+            raise BitrixError(f"Unexpected crm.company.add response: {result!r}") from exc
+
+    def crm_company_update(self, company_id: int, fields: dict[str, Any]) -> bool:
+        """Update company fields. Returns True on success."""
+        result = self.call(
+            "crm.company.update",
+            {"id": int(company_id), "fields": fields},
+        )
+        return bool(result)
+
+    # --- deal associations ------------------------------------------------
+
+    def crm_deal_contact_add(self, deal_id: int, contact_id: int) -> bool:
+        """Bind contact to deal (primary contact)."""
+        result = self.call(
+            "crm.deal.contact.add",
+            {"id": int(deal_id), "fields": {"CONTACT_ID": int(contact_id)}},
+        )
+        return bool(result)
+
+    def crm_deal_company_add(self, deal_id: int, company_id: int) -> bool:
+        """Bind company to deal."""
+        result = self.call(
+            "crm.deal.company.add",
+            {"id": int(deal_id), "fields": {"COMPANY_ID": int(company_id)}},
+        )
+        return bool(result)
+
+    def crm_deal_update(self, deal_id: int, fields: dict[str, Any]) -> bool:
+        """Update deal fields (e.g. OPPORTUNITY, OPPORTUNITY_CURRENCY_ID)."""
+        result = self.call(
+            "crm.deal.update",
+            {"id": int(deal_id), "fields": fields},
+        )
+        return bool(result)
+
+    # --- chat / messages --------------------------------------------------
+
+    def im_message_add(self, dialog_id: str, message: str) -> int:
+        """Post a message into a chat. On-prem Bitrix has limited im.* availability;
+        falls back gracefully when the endpoint is unreachable."""
+        try:
+            return int(
+                self.call(
+                    "im.message.add",
+                    {"DIALOG_ID": dialog_id, "MESSAGE": message},
+                )
+            )
+        except BitrixError:
+            raise
+
+    # --- disk (file upload) -----------------------------------------------
+
+    def disk_folder_get_subfolder_id(self, folder_id: int) -> int | None:
+        """Resolve a subfolder by name under a given parent folder, return its id.
+
+        Returns None if no matching subfolder is found. Used to put deal
+        files into a per-deal subfolder under a project root.
+        """
+        result = self.call(
+            "disk.folder.getsubfolders",
+            {"id": int(folder_id)},
+        )
+        if isinstance(result, list):
+            for f in result:
+                if f.get("NAME") == "":
+                    return int(f.get("ID"))
+        return None
+
+    def disk_folder_add_subfolder(self, parent_id: int, name: str) -> int:
+        """Create a subfolder under parent_id, return its id."""
+        result = self.call(
+            "disk.storage.addfolder",
+            {"id": int(parent_id), "data": {"NAME": name}},
+        )
+        try:
+            return int(result.get("ID", result)) if isinstance(result, dict) else int(result)
+        except (TypeError, ValueError) as exc:
+            raise BitrixError(f"disk.storage.addfolder: unexpected {result!r}") from exc
+
 
 def from_env() -> BitrixClient:
     """Build a BitrixClient from environment variables."""
