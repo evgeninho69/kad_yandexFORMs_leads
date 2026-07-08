@@ -184,9 +184,11 @@ def _format_price_rub(raw: str) -> str | None:
 
 def _make_chat_message(parsed: dict[str, Any], deal_id: int, files_count: int) -> str:
     """Формирует текст сообщения в чат «Запуск новых проектов»."""
+    from app.yandex_parser import _format_work_summary
     ct = parsed.get("customer_type", "?")
     fio = parsed.get("fio", "—")
-    title = parsed.get("work_main") or parsed.get("object_kind") or "?"
+    # Раскрываем коды работ: A1 → "Уточнение границ земельного участка (межевание)"
+    title = _format_work_summary(parsed) or parsed.get("object_kind") or "?"
     addr = parsed.get("object_address") or "—"
     phone = parsed.get("phone") or "—"
     cadnum = parsed.get("object_cadnum") or ""
@@ -514,7 +516,9 @@ async def webhook_yandex(
     # ---- 10. Auto-reply клиенту на email ----
     customer_email = email
     customer_fio = fio
-    work_summary = parsed.get("work_main", "").strip() or "(см. список работ в брифе)"
+    # Раскрываем коды: A1 → "Уточнение границ земельного участка (межевание)"
+    from app.yandex_parser import _format_work_summary
+    work_summary = _format_work_summary(parsed) or "(см. список работ в брифе)"
     auto_reply_ok = send_customer_reply(
         customer_email,
         fio=customer_fio,
