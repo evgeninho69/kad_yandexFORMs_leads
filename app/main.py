@@ -415,27 +415,69 @@ async def webhook_yandex(
 
     # ---- 7. Чат «Запуск новых проектов» (от Зоткина Евгения) ----
     if deal_id:
-        try:
-            with _bitrix() as bx:
-                chat_id_raw = _chat_id()
-                if chat_id_raw:
-                    msg = _make_chat_message(parsed, deal_id, len(uploaded_files))
-                    bx.im_message_add(f"chat{chat_id_raw}", msg)
-                    logger.info("chat message sent to chat%s", chat_id_raw)
-                else:
-                    # Если chat_id не настроен — пишем в timeline сделки, чтобы не терять уведомление.
-                    msg = _make_chat_message(parsed, deal_id, len(uploaded_files))
+        chat_id_raw = _chat_id()
+        chat_msg = _make_chat_message(parsed, deal_id, len(uploaded_files))
+        chat_sent = False
+        if chat_id_raw:
+            # 7a) Попробуем через отдельный IM-webhook токен (если настроен)
+            im_token = os.environ.get("BITRIX_IM_WEBHOOK_TOKEN", "").strip()
+            if im_token:
+                try:
+                    im_bx = bitrix_from_env()  # для любых других вызовов
+                    im_bx.close()
+                except Exception:  # noqa: BLE001
+                    pass
+                # Создаём отдельный BitrixClient с IM-токеном
+                from app.bitrix import BitrixClient as _BX
+                im_bx = _BX(
+                    base_url=os.environ.get("BITRIX_BASE_URL", "https://bitrix.a2kad.ru"),
+                    webhook_token=im_token,
+                )
+                try:
+                    im_bx.im_message_add(f"chat{chat_id_raw}", chat_msg)
+                    logger.info("chat message sent to chat%s via IM webhook", chat_id_raw)
+                    chat_sent = True
+                except BitrixError as exc:
+                    logger.warning("IM-webhook im.message.add failed: %s", exc)
+                finally:
+                    im_bx.close()
+            # 7b) Если IM-webhook не настроен — пробуем текущим (скорее всего, не сработает)
+            if not chat_sent:
+                try:
+                    with _bitrix() as bx:
+                        bx.im_message_add(f"chat{chat_id_raw}", chat_msg)
+                        logger.info("chat message sent to chat%s via default webhook", chat_id_raw)
+                        chat_sent = True
+                except BitrixError as exc:
+                    logger.warning(
+                        "im.message.add failed (need IM scope on webhook). "
+                        "Set BITRIX_IM_WEBHOOK_TOKEN with im scope to enable chat. Error: %s",
+                        exc,
+                    )
+        if not chat_sent:
+            # 7c) Fallback: timeline-комментарий (видно владельцу сделки)
+            try:
+                with _bitrix() as bx:
                     bx.crm_timeline_comment_add(
                         entity_type="deal",
                         entity_id=deal_id,
-                        comment=f"[Для чата сделки]\n{msg}",
+                        comment=f"[Для чата сделки]\n{chat_msg}",
                     )
-                    logger.warning(
-                        "BITRIX_NEW_PROJECT_CHAT_ID not set — wrote chat message to deal timeline instead. "
-                        "Set BITRIX_NEW_PROJECT_CHAT_ID=13834 in Dokploy env to send to real chat."
-                    )
-        except BitrixError as exc:
-            logger.warning("chat step (non-fatal): %s", exc)
+            except BitrixError as exc:
+                logger.warning("chat fallback (timeline) failed: %s", exc)
+        # 7d) Дополнительный ping: TG с прямой ссылкой на чат
+        try:
+            base = os.environ.get("BITRIX_BASE_URL", "https://bitrix.a2kad.ru")
+            chat_link = f"{base}/online/?IM_DIALOG=chat{chat_id_raw}" if chat_id_raw else ""
+            tg_notify(
+                f"[kad_yandexFORMs_leads] 💬 Новая сделка #{deal_id} в Bitrix-чате\n"
+                f"Ссылка: {chat_link}\n"
+                f"Заказчик: {fio or '—'} | Тип: {customer_type or '—'}\n"
+                f"Адрес: {parsed.get('object_address', '—')}\n"
+                f"Стоимость: {agreed_price or '—'}"
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("tg chat ping failed (non-fatal): %s", exc)
 
     # ---- 8. Todo: запросить документы ----
     if deal_id:

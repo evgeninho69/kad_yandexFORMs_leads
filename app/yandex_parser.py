@@ -393,10 +393,10 @@ def build_deal_fields(
             fields["OPPORTUNITY"] = price_digits
             fields["OPPORTUNITY_CURRENCY_ID"] = "RUB"
 
-    # Тип заказчика: маппим на UF_CRM_1690...  не знаем какой UF_ — поэтому
-    # используем user-field UF_CRM_TYPE и пишем канонический код (ФЛ/ЮЛ/ИП)
-    # в COMMENTS уже. Дополнительно: ставим флаг CATEGORY_ID по типу.
+    # Тип заказчика → UF_CRM_2KAD_CUSTOMER_TYPE (создано 2026-07-08, id=1697).
+    # Bitrix on-prem в этой воронке не имеет встроенного «тип заказчика»,
+    # поэтому используем UF-поле с enumeration {ФЛ, ИП, ЮЛ}.
     cust = _classify_customer(parsed)
-    fields["UF_CRM_CUSTOMER_TYPE"] = cust  # на случай если есть такое UF-поле
+    fields["UF_CRM_2KAD_CUSTOMER_TYPE"] = cust
 
     return fields
