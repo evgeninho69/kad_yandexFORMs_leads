@@ -47,7 +47,13 @@ ALLOWED_ORIGINS = [
     o.strip()
     for o in os.environ.get(
         "CORS_ALLOWED_ORIGINS",
-        "https://kad-yandexFORMs-wizard.dev.ii4ki.ru,https://kad-yandexFORMs-leads.dev.ii4ki.ru",
+        # Default: BOTH casings of wizard/leads hostnames. Browsers
+        # sometimes send lowercase Origin even when the cert is on
+        # uppercase hostname, and FastAPI's CORSMiddleware is
+        # case-sensitive on Origin. Adding both up-front avoids the
+        # "Disallowed CORS origin" 400 we hit 2026-07-08.
+        "https://kad-yandexforms-wizard.dev.ii4ki.ru,https://kad-yandexFORMs-wizard.dev.ii4ki.ru,"
+        "https://kad-yandexforms-leads.dev.ii4ki.ru,https://kad-yandexFORMs-leads.dev.ii4ki.ru",
     ).split(",")
     if o.strip()
 ]
