@@ -393,10 +393,10 @@ def build_deal_fields(
             fields["OPPORTUNITY"] = price_digits
             fields["OPPORTUNITY_CURRENCY_ID"] = "RUB"
 
-    # Тип заказчика → UF_CRM_2KAD_CUSTOMER_TYPE (создано 2026-07-08, id=1697).
-    # Bitrix on-prem в этой воронке не имеет встроенного «тип заказчика»,
-    # поэтому используем UF-поле с enumeration {ФЛ, ИП, ЮЛ}.
+    # Тип заказчика → существующее UF-поле «Тип заказчика (ЮЛ/ФЛ)»
+    # (UF_CRM_1586436225) с вариантами «Физ. лицо» / «Юр. лицо».
+    # ИП маппим на «Юр. лицо» (ИП = ЮЛ для целей сделки).
     cust = _classify_customer(parsed)
-    fields["UF_CRM_2KAD_CUSTOMER_TYPE"] = cust
+    fields["UF_CRM_1586436225"] = "Юр. лицо" if cust in ("ЮЛ", "ИП") else "Физ. лицо"
 
     return fields
