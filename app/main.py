@@ -423,14 +423,16 @@ async def webhook_yandex(
                     bx.im_message_add(f"chat{chat_id_raw}", msg)
                     logger.info("chat message sent to chat%s", chat_id_raw)
                 else:
-                    # Альтернатива: создаём «комментарий в сделке» с пометкой для чата.
-                    # В on-prem чат сделки создаётся автоматически при первом открытии
-                    # карточки; timeline-комментарий увидит любой, открывший сделку.
+                    # Если chat_id не настроен — пишем в timeline сделки, чтобы не терять уведомление.
                     msg = _make_chat_message(parsed, deal_id, len(uploaded_files))
                     bx.crm_timeline_comment_add(
                         entity_type="deal",
                         entity_id=deal_id,
                         comment=f"[Для чата сделки]\n{msg}",
+                    )
+                    logger.warning(
+                        "BITRIX_NEW_PROJECT_CHAT_ID not set — wrote chat message to deal timeline instead. "
+                        "Set BITRIX_NEW_PROJECT_CHAT_ID=13834 in Dokploy env to send to real chat."
                     )
         except BitrixError as exc:
             logger.warning("chat step (non-fatal): %s", exc)

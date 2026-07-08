@@ -47,6 +47,7 @@ DEFAULT_FIELD_MAP: dict[str, tuple[str, str]] = {
     "deadline": ("deadline", "Желаемая дата завершения"),
     "urgency": ("urgency", "Срочность"),
     "source": ("source", "Откуда узнали о нас"),
+    "agreed_price": ("agreed_price", "Согласованная стоимость работ"),
     "consent_pdn": ("consent_pdn", "Согласие на обработку ПДн"),
 }
 
@@ -383,4 +384,19 @@ def build_deal_fields(
     email = (parsed.get("email") or "").strip()
     if email:
         fields["UF_CRM_RT_EMAIL_CONT"] = email
+
+    # Согласованная стоимость (если клиент указал). Цифры, без пробелов.
+    price_raw = (parsed.get("agreed_price") or "").strip()
+    if price_raw:
+        price_digits = re.sub(r"\D", "", price_raw)
+        if price_digits:
+            fields["OPPORTUNITY"] = price_digits
+            fields["OPPORTUNITY_CURRENCY_ID"] = "RUB"
+
+    # Тип заказчика: маппим на UF_CRM_1690...  не знаем какой UF_ — поэтому
+    # используем user-field UF_CRM_TYPE и пишем канонический код (ФЛ/ЮЛ/ИП)
+    # в COMMENTS уже. Дополнительно: ставим флаг CATEGORY_ID по типу.
+    cust = _classify_customer(parsed)
+    fields["UF_CRM_CUSTOMER_TYPE"] = cust  # на случай если есть такое UF-поле
+
     return fields
