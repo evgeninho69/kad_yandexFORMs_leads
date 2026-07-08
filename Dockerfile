@@ -1,5 +1,6 @@
 FROM python:3.12-slim
 
+# 2026-07-08: trigger rebuild for CORS lowercase fix
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1
